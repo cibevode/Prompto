@@ -3,7 +3,7 @@
 	"name": "Prompto",
 	"version": "1.0.0",
 	"minAppVersion": "1.6.0",
-	"description": "Intelligent context-aware prompt library. One-click cards → automatic context → LLM-powered adaptation → beautiful preview → one-tap send to Grok/Claude/OpenAI/Venice/Ollama + effectiveness tracking.",
+	"description": "AI prompt library with context-aware adaptation. Browse, adapt, and send prompts to 5 LLMs from a sidebar..",
 	"author": "Cibevode",
 	"authorUrl": "https://github.com/cibevode",
 	"isDesktopOnly": false
