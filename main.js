@@ -33,7 +33,7 @@ var CATEGORIES = [
 	{ label: "Research", icon: "search" },
 	{ label: "Product", icon: "package" },
 	{ label: "Daily", icon: "calendar" },
-	{ label: "Favorites", icon: "star" },
+	{ label: "Favorites", icon: "flag" },
 ];
 
 var PROVIDER_NAMES = {
@@ -830,7 +830,7 @@ class ManageModal extends obsidian.Modal {
 			var va, vb;
 			if (field === "name") { va = a.name.toLowerCase(); vb = b.name.toLowerCase(); }
 			else if (field === "category") { va = a.category; vb = b.category; }
-			else if (field === "effectiveness") { va = a.effectiveness; vb = b.effectiveness; }
+			else if (field === "favorite") { va = a.favorite ? 1 : 0; vb = b.favorite ? 1 : 0; }
 			else if (field === "lastUsed") { va = a.lastUsed || ""; vb = b.lastUsed || ""; }
 			else if (field === "tags") { va = a.tags.join(", "); vb = b.tags.join(", "); }
 			else { va = a.name; vb = b.name; }
@@ -956,11 +956,11 @@ class ManageModal extends obsidian.Modal {
 		frBtn.createSpan({ text: " Find & Replace" });
 		frBtn.addEventListener("click", function() { self.bulkFindReplace(); });
 
-		// Mass set rating
-		var rateBtn = this.bulkBar.createEl("button", { cls: "prompto-btn" });
-		obsidian.setIcon(rateBtn.createSpan(), "star");
-		rateBtn.createSpan({ text: " Set Rating" });
-		rateBtn.addEventListener("click", function() { self.bulkSetRating(); });
+		// Mass toggle favorite
+		var favBtn = this.bulkBar.createEl("button", { cls: "prompto-btn" });
+		obsidian.setIcon(favBtn.createSpan(), "flag");
+		favBtn.createSpan({ text: " Toggle Favorite" });
+		favBtn.addEventListener("click", function() { self.bulkToggleFavorite(); });
 	}
 
 	renderTable() {
@@ -994,7 +994,7 @@ class ManageModal extends obsidian.Modal {
 			{ key: "name", label: "Name" },
 			{ key: "category", label: "Category" },
 			{ key: "tags", label: "Tags" },
-			{ key: "effectiveness", label: "Rating" },
+			{ key: "favorite", label: "Favorite" },
 			{ key: "lastUsed", label: "Last Used" },
 		];
 
@@ -1046,11 +1046,20 @@ class ManageModal extends obsidian.Modal {
 				}
 				if (prompt.tags.length > 4) tdTags.createSpan({ cls: "prompto-card-tag", text: "+" + (prompt.tags.length - 4) });
 
-				// Rating
-				var tdRate = tr.createEl("td");
-				if (prompt.effectiveness > 0) {
-					tdRate.createSpan({ text: "\u2605".repeat(Math.round(prompt.effectiveness)) + "\u2606".repeat(5 - Math.round(prompt.effectiveness)) + " " + prompt.effectiveness, cls: "prompto-manage-stars" });
-				} else { tdRate.createSpan({ text: "—", cls: "prompto-form-hint" }); }
+				// Favorite
+				var tdFav = tr.createEl("td");
+				var favBtn = tdFav.createEl("span", { cls: "prompto-card-fav", title: prompt.favorite ? "Unfavorite" : "Favorite" });
+				favBtn.style.position = "relative";
+				favBtn.style.cursor = "pointer";
+				obsidian.setIcon(favBtn, prompt.favorite ? "flag" : "flag-off");
+				(function(p, btn) { btn.addEventListener("click", async function(e) {
+					e.stopPropagation();
+					var newVal = !p.favorite;
+					await updateFrontmatterField(self.app, p.path, "favorite", newVal);
+					p.favorite = newVal;
+					obsidian.setIcon(btn, newVal ? "flag" : "flag-off");
+					btn.title = newVal ? "Unfavorite" : "Favorite";
+				}); })(prompt, favBtn);
 
 				// Last used
 				tr.createEl("td", { text: prompt.lastUsed || "—", cls: "prompto-manage-date" });
@@ -1150,21 +1159,21 @@ class ManageModal extends obsidian.Modal {
 		}).open();
 	}
 
-	async bulkSetRating() {
+	async bulkToggleFavorite() {
 		var self = this;
-		new InputModal(this.app, "Set rating for " + this.selectedPaths.size + " prompt(s)", "1-5", async function(val) {
-			if (!val) return;
-			var rating = parseFloat(val.trim());
-			if (isNaN(rating) || rating < 0 || rating > 5) { new obsidian.Notice("Rating must be between 0 and 5."); return; }
-			rating = Math.round(rating * 10) / 10;
-			var paths = Array.from(self.selectedPaths);
-			for (var i = 0; i < paths.length; i++) {
-				await updateFrontmatterField(self.app, paths[i], "effectiveness", rating);
-			}
-			new obsidian.Notice("Set rating to " + rating + " on " + paths.length + " prompt(s).");
-			await self.loadPrompts();
-			self.render();
-		}).open();
+		var paths = Array.from(this.selectedPaths);
+		// If any selected prompt is NOT a favorite, we favorite all; otherwise unfavorite all
+		var anyNotFav = false;
+		for (var i = 0; i < this.filteredPrompts.length; i++) {
+			if (this.selectedPaths.has(this.filteredPrompts[i].path) && !this.filteredPrompts[i].favorite) { anyNotFav = true; break; }
+		}
+		var newVal = anyNotFav;
+		for (var i = 0; i < paths.length; i++) {
+			await updateFrontmatterField(this.app, paths[i], "favorite", newVal);
+		}
+		new obsidian.Notice((newVal ? "Favorited " : "Unfavorited ") + paths.length + " prompt(s).");
+		await this.loadPrompts();
+		this.render();
 	}
 
 	async exportAs(format) {
@@ -1428,7 +1437,7 @@ class PromptLibraryView extends obsidian.ItemView {
 		});
 
 		var favBtn = filterRow.createEl("button", { cls: "prompto-filter-btn" + (this.activeCategory === "Favorites" ? " prompto-filter-btn-active" : "") });
-		obsidian.setIcon(favBtn.createSpan({ cls: "prompto-tab-icon" }), "star");
+		obsidian.setIcon(favBtn.createSpan({ cls: "prompto-tab-icon" }), "flag");
 		favBtn.createSpan({ text: " Favorites" });
 		favBtn.addEventListener("click", function() {
 			self.activeCategory = "Favorites";
@@ -1501,7 +1510,7 @@ class PromptLibraryView extends obsidian.ItemView {
 		if (prompt.effectiveness > 0) ft.createSpan({ cls: "prompto-card-stars", text: "\u2605".repeat(Math.round(prompt.effectiveness)) + "\u2606".repeat(5 - Math.round(prompt.effectiveness)) + " " + prompt.effectiveness });
 		if (prompt.lastUsed) ft.createSpan({ cls: "prompto-card-date", text: prompt.lastUsed });
 		var fav = card.createDiv({ cls: "prompto-card-fav" });
-		obsidian.setIcon(fav, prompt.favorite ? "star" : "star-off");
+		obsidian.setIcon(fav, prompt.favorite ? "flag" : "flag-off");
 		fav.addEventListener("click", async function(e) {
 			e.stopPropagation(); prompt.favorite = !prompt.favorite;
 			await updateFrontmatterField(self.app, prompt.path, "favorite", prompt.favorite);
