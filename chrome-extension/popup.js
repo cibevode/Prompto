@@ -14,7 +14,7 @@ const DEFAULT_CONFIG = {
   sourceType: "local", cloudUrl: "", pasteJson: "",
   refreshInterval: 5, theme: "system", showBadge: true,
   customSelectors: "", onboarded: false,
-  adapterModel: "grok", grokKey: "", claudeKey: "", openaiKey: "", veniceKey: ""
+  adapterModel: "grok", grokKey: "", claudeKey: "", openaiKey: "", geminiKey: "", veniceKey: ""
 };
 
 async function loadConfig() {
@@ -401,6 +401,14 @@ async function callLLM(provider, systemPrompt, userPrompt, config) {
     });
     const data = await resp.json();
     return data.choices[0].message.content;
+  } else if (provider === "gemini" && config.geminiKey) {
+    const resp = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + config.geminiKey, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contents: [{ parts: [{ text: system + "\n\n" + user }] }], generationConfig: { temperature: 0.7 } })
+    });
+    const data = await resp.json();
+    return data.candidates[0].content.parts[0].text;
   } else if (provider === "venice" && config.veniceKey) {
     const resp = await fetch("https://api.venice.ai/api/v1/chat/completions", {
       method: "POST",
@@ -419,7 +427,7 @@ async function adaptToPage() {
   const provider = config.adapterModel || "grok";
 
   // Check if API key is configured
-  const keyMap = { grok: config.grokKey, claude: config.claudeKey, openai: config.openaiKey, venice: config.veniceKey };
+  const keyMap = { grok: config.grokKey, claude: config.claudeKey, openai: config.openaiKey, gemini: config.geminiKey, venice: config.veniceKey };
   if (!keyMap[provider]) {
     toast("No API key set for " + provider + " — configure in Settings");
     return;
@@ -601,6 +609,7 @@ async function loadSettingsUI() {
   document.getElementById("grokKey").value = config.grokKey || "";
   document.getElementById("claudeKey").value = config.claudeKey || "";
   document.getElementById("openaiKey").value = config.openaiKey || "";
+  document.getElementById("geminiKey").value = config.geminiKey || "";
   document.getElementById("veniceKey").value = config.veniceKey || "";
   if (dirHandle) {
     document.getElementById("folderPath").textContent = "✓ Folder: " + dirHandle.name;
@@ -652,6 +661,7 @@ async function saveSettingsAndReload() {
     grokKey: document.getElementById("grokKey").value.trim(),
     claudeKey: document.getElementById("claudeKey").value.trim(),
     openaiKey: document.getElementById("openaiKey").value.trim(),
+    geminiKey: document.getElementById("geminiKey").value.trim(),
     veniceKey: document.getElementById("veniceKey").value.trim(),
     onboarded: true,
   };
