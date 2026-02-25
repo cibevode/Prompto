@@ -217,6 +217,11 @@ async function callLLM(provider, systemPrompt, userPrompt, settings) {
 			headers: { "Content-Type": "application/json", Authorization: "Bearer " + settings.openaiApiKey },
 			body: JSON.stringify({ model: "gpt-4o", messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }], temperature: 0.7 }) });
 		return resp.json.choices[0].message.content;
+	} else if (provider === "gemini") {
+		var resp = await obsidian.requestUrl({ url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + settings.geminiApiKey, method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ contents: [{ parts: [{ text: systemPrompt + "\n\n" + userPrompt }] }], generationConfig: { temperature: 0.7 } }) });
+		return resp.json.candidates[0].content.parts[0].text;
 	} else if (provider === "venice") {
 		var resp = await obsidian.requestUrl({ url: "https://api.venice.ai/api/v1/chat/completions", method: "POST",
 			headers: { "Content-Type": "application/json", Authorization: "Bearer " + settings.veniceApiKey },
@@ -633,6 +638,8 @@ class PromptoSettingTab extends obsidian.PluginSettingTab {
 			.addText(function(t) { t.setPlaceholder("sk-ant-...").setValue(p.settings.claudeApiKey).onChange(async function(v) { p.settings.claudeApiKey = v.trim(); await p.saveSettings(); }); t.inputEl.type = "password"; });
 		new obsidian.Setting(el).setName("OpenAI API key").setDesc("Get yours at platform.openai.com")
 			.addText(function(t) { t.setPlaceholder("sk-...").setValue(p.settings.openaiApiKey).onChange(async function(v) { p.settings.openaiApiKey = v.trim(); await p.saveSettings(); }); t.inputEl.type = "password"; });
+		new obsidian.Setting(el).setName("Google Gemini API key").setDesc("Get yours at aistudio.google.com")
+			.addText(function(t) { t.setPlaceholder("AIza...").setValue(p.settings.geminiApiKey).onChange(async function(v) { p.settings.geminiApiKey = v.trim(); await p.saveSettings(); }); t.inputEl.type = "password"; });
 		new obsidian.Setting(el).setName("Venice.ai API key").setDesc("Get yours at venice.ai — privacy-first, OpenAI-compatible")
 			.addText(function(t) { t.setPlaceholder("venice-...").setValue(p.settings.veniceApiKey).onChange(async function(v) { p.settings.veniceApiKey = v.trim(); await p.saveSettings(); }); t.inputEl.type = "password"; });
 		new obsidian.Setting(el).setName("Venice.ai model").setDesc("Model name (e.g. llama-3.3-70b, deepseek-r1)")
@@ -643,7 +650,7 @@ class PromptoSettingTab extends obsidian.PluginSettingTab {
 			.addText(function(t) { t.setPlaceholder("llama3").setValue(p.settings.ollamaModel).onChange(async function(v) { p.settings.ollamaModel = v.trim() || "llama3"; await p.saveSettings(); }); });
 
 		el.createEl("h2", { text: "Defaults" });
-		var opts = { grok: "Grok (xAI)", claude: "Claude (Anthropic)", openai: "GPT-4o (OpenAI)", venice: "Venice.ai", ollama: "Ollama (Local)" };
+		var opts = { grok: "Grok (xAI)", claude: "Claude (Anthropic)", openai: "GPT-4o (OpenAI)", gemini: "Gemini (Google)", venice: "Venice.ai", ollama: "Ollama (Local)" };
 		new obsidian.Setting(el).setName("Default refiner model").setDesc("Which LLM adapts your prompts with context.")
 			.addDropdown(function(d) { d.addOptions(opts).setValue(p.settings.defaultRefiner).onChange(async function(v) { p.settings.defaultRefiner = v; await p.saveSettings(); }); });
 		new obsidian.Setting(el).setName("Default send-to model").setDesc("Default destination when you click Send.")
