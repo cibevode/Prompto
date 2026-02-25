@@ -13,7 +13,8 @@ let recentlyUsed = []; // prompt names
 const DEFAULT_CONFIG = {
   sourceType: "local", cloudUrl: "", pasteJson: "",
   refreshInterval: 5, theme: "system", showBadge: true,
-  customSelectors: "", onboarded: false
+  customSelectors: "", onboarded: false,
+  adapterModel: "grok", grokKey: "", claudeKey: "", openaiKey: "", veniceKey: ""
 };
 
 async function loadConfig() {
@@ -323,8 +324,6 @@ function renderCards() {
 function renderCard(container, p) {
   const card = document.createElement("div");
   card.className = "card";
-  const stars = p.effectiveness > 0
-    ? "★".repeat(Math.round(p.effectiveness)) + "☆".repeat(5 - Math.round(p.effectiveness)) + " " + p.effectiveness : "";
   card.innerHTML =
     '<div class="card-header">' +
       '<span class="card-title">' + esc(p.name) + '</span>' +
@@ -336,7 +335,6 @@ function renderCard(container, p) {
     '</div>' +
     '<div class="card-body">' + esc((p.body || '').slice(0, 120)) + '</div>' +
     '<div class="card-footer">' +
-      '<span class="card-stars">' + stars + '</span>' +
       '<span class="card-date">' + esc(p.lastUsed || '') + '</span>' +
     '</div>';
   card.addEventListener("click", () => showPreview(p));
@@ -350,13 +348,14 @@ function showPreview(prompt) {
   currentPrompt = prompt;
   document.getElementById("previewTitle").textContent = prompt.name;
   document.getElementById("previewCat").textContent = prompt.category || "General";
-  // Meta line
   const meta = [];
-  if (prompt.effectiveness > 0) meta.push("★ " + prompt.effectiveness);
   if (prompt.lastUsed) meta.push("Last: " + prompt.lastUsed);
   if ((prompt.tags || []).length) meta.push(prompt.tags.join(", "));
   document.getElementById("previewMeta").innerHTML = meta.map(m => '<span>' + esc(m) + '</span>').join('');
   document.getElementById("previewPrompt").textContent = prompt.body || "";
+  // Reset adapted section
+  document.getElementById("adaptedSection").style.display = "none";
+  document.getElementById("adaptedPrompt").textContent = "";
   document.getElementById("preview").classList.add("active");
 }
 
@@ -368,23 +367,79 @@ function hidePreview() {
 // ═══ ACTIONS ═══
 async function copyPrompt() {
   if (!currentPrompt) return;
-  await navigator.clipboard.writeText(currentPrompt.body || "");
+  // Copy adapted version if available, otherwise original
+  const adaptedEl = document.getElementById("adaptedPrompt");
+  const text = (adaptedEl && adaptedEl.textContent) ? adaptedEl.textContent : (currentPrompt.body || "");
+  await navigator.clipboard.writeText(text);
   await trackUsage(currentPrompt);
   toast("Copied!");
 }
 
+// ═══ LLM API ═══
+async function callLLM(provider, systemPrompt, userPrompt, config) {
+  if (provider === "grok" && config.grokKey) {
+    const resp = await fetch("https://api.x.ai/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + config.grokKey },
+      body: JSON.stringify({ model: "grok-3-mini-fast", messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }], temperature: 0.7 })
+    });
+    const data = await resp.json();
+    return data.choices[0].message.content;
+  } else if (provider === "claude" && config.claudeKey) {
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": config.claudeKey, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 4096, system: systemPrompt, messages: [{ role: "user", content: userPrompt }] })
+    });
+    const data = await resp.json();
+    return data.content[0].text;
+  } else if (provider === "openai" && config.openaiKey) {
+    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + config.openaiKey },
+      body: JSON.stringify({ model: "gpt-4o", messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }], temperature: 0.7 })
+    });
+    const data = await resp.json();
+    return data.choices[0].message.content;
+  } else if (provider === "venice" && config.veniceKey) {
+    const resp = await fetch("https://api.venice.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + config.veniceKey },
+      body: JSON.stringify({ model: "llama-3.3-70b", messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }], temperature: 0.7 })
+    });
+    const data = await resp.json();
+    return data.choices[0].message.content;
+  }
+  throw new Error("No API key configured for " + provider);
+}
+
 async function adaptToPage() {
   if (!currentPrompt) return;
+  const config = await loadConfig();
+  const provider = config.adapterModel || "grok";
 
-  // Check for captured context first (from right-click menu)
-  const stored = await chrome.storage.local.get("prompto_page_context");
-  let ctx = stored.prompto_page_context;
+  // Check if API key is configured
+  const keyMap = { grok: config.grokKey, claude: config.claudeKey, openai: config.openaiKey, venice: config.veniceKey };
+  if (!keyMap[provider]) {
+    toast("No API key set for " + provider + " — configure in Settings");
+    return;
+  }
 
-  if (!ctx || Date.now() - ctx.timestamp > 300000) {
-    // Scrape live from active tab
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab) { toast("No active tab"); return; }
-    try {
+  // Show loading state
+  const btn = document.getElementById("btnAdapt");
+  const origText = btn.textContent;
+  btn.textContent = "⏳ Adapting...";
+  btn.style.opacity = "0.6";
+  btn.style.pointerEvents = "none";
+
+  try {
+    // Scrape page context
+    const stored = await chrome.storage.local.get("prompto_page_context");
+    let ctx = stored.prompto_page_context;
+
+    if (!ctx || Date.now() - ctx.timestamp > 300000) {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab) { toast("No active tab"); return; }
       const results = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         func: () => ({
@@ -392,29 +447,75 @@ async function adaptToPage() {
           title: document.title,
           url: window.location.href,
           description: (document.querySelector('meta[name="description"]') || {}).content || "",
-          body: document.body.innerText.slice(0, 3000)
+          body: document.body.innerText.slice(0, 4000)
         })
       });
       ctx = results[0].result;
-    } catch (e) { toast("Could not access page"); return; }
-  }
+    }
 
-  let adapted = currentPrompt.body || "";
-  const contextText = ctx.selection || ctx.body.slice(0, 1500);
-  adapted = adapted.replace(/\{\{selected_text\}\}/g, contextText);
-  adapted = '[Context: "' + ctx.title + '" — ' + ctx.url + ']\n\n' + adapted;
-  await navigator.clipboard.writeText(adapted);
-  await trackUsage(currentPrompt);
-  // Clear captured context
-  await chrome.storage.local.remove("prompto_page_context");
-  document.getElementById("contextBanner").style.display = "none";
-  toast("Adapted & copied!");
+    // Build the adaptation request
+    const systemPrompt = `You are a prompt engineering expert. Your job is to take a prompt template and intelligently adapt it based on the user's current context.
+
+Rules:
+- Preserve the original prompt's intent, structure, and tone
+- Weave in specific, relevant details from the context naturally
+- Replace any {{variables}} with appropriate values inferred from context
+- Make the prompt immediately usable — the user should be able to paste it directly into an LLM
+- Return ONLY the adapted prompt text, nothing else — no explanations, no preamble`;
+
+    const contextSummary = [
+      ctx.title ? 'Page: "' + ctx.title + '"' : '',
+      ctx.url ? 'URL: ' + ctx.url : '',
+      ctx.selection ? 'User selected text:\n' + ctx.selection.slice(0, 2000) : '',
+      ctx.description ? 'Page description: ' + ctx.description : '',
+      ctx.body ? 'Page content (excerpt):\n' + ctx.body.slice(0, 2500) : ''
+    ].filter(Boolean).join('\n\n');
+
+    const userPrompt = `## Original Prompt Template\n${currentPrompt.body}\n\n## Current Page Context\n${contextSummary}\n\nAdapt the prompt above using this context. Make it specific and ready to use. Return ONLY the adapted prompt.`;
+
+    // Call LLM
+    const adapted = await callLLM(provider, systemPrompt, userPrompt, config);
+
+    // Show adapted version in the preview
+    document.getElementById("adaptedPrompt").textContent = adapted;
+    document.getElementById("adaptedSection").style.display = "";
+
+    // Copy to clipboard
+    await navigator.clipboard.writeText(adapted);
+    await trackUsage(currentPrompt);
+
+    // Clear captured context
+    await chrome.storage.local.remove("prompto_page_context");
+    document.getElementById("contextBanner").style.display = "none";
+
+    toast("Adapted & copied!");
+
+  } catch (e) {
+    console.error("Prompto adapt error:", e);
+    const msg = (e.message || "").toLowerCase();
+    if (msg.includes("cannot access") || msg.includes("chrome://") || msg.includes("not be scripted") || msg.includes("permissions")) {
+      toast("Can't read this page — open a regular webpage first");
+    } else if (msg.includes("api key") || msg.includes("401") || msg.includes("403")) {
+      toast("API key issue — check your key in Settings");
+    } else if (msg.includes("fetch") || msg.includes("network") || msg.includes("failed to fetch")) {
+      toast("Network error — check your connection");
+    } else {
+      toast("Adaptation failed — try on a different page");
+    }
+  } finally {
+    btn.textContent = origText;
+    btn.style.opacity = "";
+    btn.style.pointerEvents = "";
+  }
 }
 
 async function injectPrompt() {
   if (!currentPrompt) return;
   const config = await loadConfig();
   const customSelectors = (config.customSelectors || "").split("\n").map(s => s.trim()).filter(Boolean);
+  // Use adapted version if available
+  const adaptedEl = document.getElementById("adaptedPrompt");
+  const textToInject = (adaptedEl && adaptedEl.textContent) ? adaptedEl.textContent : (currentPrompt.body || "");
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab) { toast("No active tab"); return; }
@@ -462,7 +563,7 @@ async function injectPrompt() {
         }
         return false;
       },
-      args: [currentPrompt.body || "", customSelectors]
+      args: [textToInject, customSelectors]
     });
     await trackUsage(currentPrompt);
     if (results[0]?.result) {
@@ -470,11 +571,11 @@ async function injectPrompt() {
       window.close();
     } else {
       toast("No input found — copied instead");
-      await navigator.clipboard.writeText(currentPrompt.body || "");
+      await navigator.clipboard.writeText(textToInject);
     }
   } catch (e) {
-    toast("Inject failed — copied instead");
-    await navigator.clipboard.writeText(currentPrompt.body || "");
+    toast("Can't inject on this page — prompt copied instead");
+    await navigator.clipboard.writeText(textToInject);
   }
 }
 
@@ -495,11 +596,31 @@ async function loadSettingsUI() {
   document.getElementById("pasteJson").value = config.pasteJson || "";
   document.getElementById("refreshInterval").value = String(config.refreshInterval || 5);
   document.getElementById("customSelectors").value = config.customSelectors || "";
+  // API keys
+  setRadioGroup("adapterModel", config.adapterModel || "grok");
+  document.getElementById("grokKey").value = config.grokKey || "";
+  document.getElementById("claudeKey").value = config.claudeKey || "";
+  document.getElementById("openaiKey").value = config.openaiKey || "";
+  document.getElementById("veniceKey").value = config.veniceKey || "";
   if (dirHandle) {
     document.getElementById("folderPath").textContent = "✓ Folder: " + dirHandle.name;
   } else {
     const sf = await chrome.storage.local.get("prompto_local_filename");
     if (sf.prompto_local_filename) document.getElementById("folderPath").textContent = "✓ File: " + sf.prompto_local_filename;
+  }
+  // OS-aware path hint
+  const hintEl = document.getElementById("pathHint");
+  if (hintEl) {
+    const plat = navigator.platform || navigator.userAgentData?.platform || "";
+    let path;
+    if (plat.startsWith("Win")) {
+      path = "C:\\Users\\YourName\\Documents\\YourVault\\Prompto Library\\prompto-library.json";
+    } else if (plat.startsWith("Mac") || plat.startsWith("iP")) {
+      path = "~/Documents/YourVault/Prompto Library/prompto-library.json";
+    } else {
+      path = "~/Documents/YourVault/Prompto Library/prompto-library.json";
+    }
+    hintEl.textContent = "📍 Look here: " + path;
   }
 }
 
@@ -527,6 +648,11 @@ async function saveSettingsAndReload() {
     theme: getRadioValue("themeSelect") || "system",
     showBadge: getRadioValue("badgeToggle") === "true",
     customSelectors: document.getElementById("customSelectors").value,
+    adapterModel: getRadioValue("adapterModel") || "grok",
+    grokKey: document.getElementById("grokKey").value.trim(),
+    claudeKey: document.getElementById("claudeKey").value.trim(),
+    openaiKey: document.getElementById("openaiKey").value.trim(),
+    veniceKey: document.getElementById("veniceKey").value.trim(),
     onboarded: true,
   };
   await saveConfig(config);
@@ -651,6 +777,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Badge radios
   document.querySelectorAll("#badgeToggle .radio-btn").forEach(btn => {
     btn.addEventListener("click", () => setRadioGroup("badgeToggle", btn.dataset.value));
+  });
+  // Adapter model radios
+  document.querySelectorAll("#adapterModel .radio-btn").forEach(btn => {
+    btn.addEventListener("click", () => setRadioGroup("adapterModel", btn.dataset.value));
   });
 
   // Theme toggle button (quick toggle)

@@ -77,10 +77,14 @@
   <div class="overlay-body">
     <div class="preview-meta" id="previewMeta"></div>
     <div class="preview-prompt" id="previewPrompt"></div>
+    <div id="adaptedSection" style="display:none;margin-top:12px;">
+      <div class="section-label">✨ AI-ADAPTED VERSION</div>
+      <div class="preview-prompt" id="adaptedPrompt" style="border:1px solid var(--accent);"></div>
+    </div>
   </div>
   <div class="action-bar">
     <button class="btn primary" id="btnCopy" title="Copy to clipboard">📋 Copy</button>
-    <button class="btn" id="btnAdapt" title="Fill {{selected_text}} with page content">✨ Adapt</button>
+    <button class="btn" id="btnAdapt" title="AI rewrites this prompt for the current page context">✨ Adapt</button>
     <button class="btn" id="btnInject" title="Paste into active LLM chat input">➡ Inject</button>
   </div>
 </div>
@@ -104,8 +108,9 @@
 
     <div class="setting-item source-panel" id="localSetting">
       <label>Library file</label>
-      <div class="desc">Select your <code>prompto-library.json</code> file — exported by the Obsidian plugin. Works from any synced folder (Dropbox, OneDrive, Google Drive, iCloud, Box, Proton Drive, etc.)</div>
-      <button class="save-btn" id="pickFolder">📁 Choose File or Folder</button>
+      <div class="desc">Select your <code>prompto-library.json</code> file — exported automatically by the Obsidian plugin into your Prompto Library folder.</div>
+      <div class="desc" id="pathHint" style="background:var(--bg-hover);padding:6px 8px;border-radius:4px;font-family:monospace;margin-bottom:6px;word-break:break-all;"></div>
+      <button class="save-btn" id="pickFolder">📁 Choose prompto-library.json</button>
       <div class="desc" id="folderPath" style="margin-top:6px;"></div>
     </div>
 
@@ -151,6 +156,34 @@
         <button class="radio-btn active" data-value="true">On</button>
         <button class="radio-btn" data-value="false">Off</button>
       </div>
+    </div>
+
+    <h3>AI Adaptation</h3>
+    <div class="setting-item">
+      <label>Adapter model</label>
+      <div class="desc">The LLM that rewrites your prompts based on page context. Requires an API key below.</div>
+      <div class="radio-group" id="adapterModel">
+        <button class="radio-btn active" data-value="grok">Grok</button>
+        <button class="radio-btn" data-value="claude">Claude</button>
+        <button class="radio-btn" data-value="openai">GPT-4o</button>
+        <button class="radio-btn" data-value="venice">Venice</button>
+      </div>
+    </div>
+    <div class="setting-item">
+      <label>Grok API key</label>
+      <input type="text" id="grokKey" placeholder="xai-..." style="font-family:monospace;">
+    </div>
+    <div class="setting-item">
+      <label>Claude API key</label>
+      <input type="text" id="claudeKey" placeholder="sk-ant-..." style="font-family:monospace;">
+    </div>
+    <div class="setting-item">
+      <label>OpenAI API key</label>
+      <input type="text" id="openaiKey" placeholder="sk-..." style="font-family:monospace;">
+    </div>
+    <div class="setting-item">
+      <label>Venice API key</label>
+      <input type="text" id="veniceKey" placeholder="venice-..." style="font-family:monospace;">
     </div>
 
     <h3>Injection</h3>
