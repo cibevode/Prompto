@@ -6,7 +6,7 @@
 <title>Prompto</title>
 <link rel="stylesheet" href="popup.css">
 </head>
-<body>
+<body style="height:580px;">
 <div class="toast" id="toast"></div>
 
 <!-- ═══ ONBOARDING ═══ -->
@@ -29,7 +29,7 @@
         <div><strong>Use anywhere</strong><br>Copy, adapt to the current page, or inject directly into ChatGPT, Claude, and more.</div>
       </div>
     </div>
-    <button class="btn primary full-width" id="onboardLocal">📁 Connect Local Folder</button>
+    <button class="btn primary full-width" id="onboardLocal">📁 Choose Local File</button>
     <button class="btn full-width" id="onboardCloud">☁️ Use Cloud URL</button>
     <button class="btn full-width" id="onboardPaste">📋 Paste JSON</button>
     <div class="onboard-skip"><a id="onboardSkip">Skip — I'll set up later</a></div>
@@ -103,9 +103,9 @@
     </div>
 
     <div class="setting-item source-panel" id="localSetting">
-      <label>Library folder</label>
-      <div class="desc">Select folder containing <code>prompto-library.json</code> — works with any synced folder (Dropbox, OneDrive, Google Drive, iCloud, Box, Proton Drive, Syncthing, etc.)</div>
-      <button class="save-btn" id="pickFolder">📁 Choose Folder</button>
+      <label>Library file</label>
+      <div class="desc">Select your <code>prompto-library.json</code> file — exported by the Obsidian plugin. Works from any synced folder (Dropbox, OneDrive, Google Drive, iCloud, Box, Proton Drive, etc.)</div>
+      <button class="save-btn" id="pickFolder">📁 Choose File or Folder</button>
       <div class="desc" id="folderPath" style="margin-top:6px;"></div>
     </div>
 

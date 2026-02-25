@@ -14,13 +14,8 @@ chrome.runtime.onInstalled.addListener(() => {
     title: "Open Prompto",
     contexts: ["action"]
   });
-  chrome.contextMenus.create({
-    id: "prompto-sidepanel",
-    title: "Open in Side Panel",
-    contexts: ["action"]
-  });
 
-  // Enable side panel
+  // Enable side panel if supported
   if (chrome.sidePanel) {
     chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(() => {});
   }
@@ -51,9 +46,6 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         chrome.action.setBadgeBackgroundColor({ color: "#7c5bf0" });
       });
     }, 2000);
-  }
-  if (info.menuItemId === "prompto-sidepanel" && chrome.sidePanel) {
-    chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => {});
   }
 });
 

@@ -107,34 +107,80 @@ async function trackUsage(prompt) {
   chrome.runtime.sendMessage({ type: "setLastUsed", prompt: { name: prompt.name, body: prompt.body } });
 }
 
-// ═══ LOCAL FOLDER (File System Access API) ═══
+// ═══ LOCAL FILE / FOLDER ═══
+let localJsonData = null; // cached JSON data from file pick
+
 async function loadFromLocal() {
+  // Try directory handle first (Chrome)
   if (!dirHandle) {
     try { dirHandle = await getStoredHandle(); } catch (e) {}
   }
-  if (!dirHandle) return null;
-  try {
-    const perm = await dirHandle.queryPermission({ mode: "read" });
-    if (perm !== "granted") {
-      const req = await dirHandle.requestPermission({ mode: "read" });
-      if (req !== "granted") return null;
-    }
-    const fh = await dirHandle.getFileHandle("prompto-library.json");
-    const file = await fh.getFile();
-    return JSON.parse(await file.text());
-  } catch (e) { console.log("Prompto: local read failed", e); return null; }
+  if (dirHandle) {
+    try {
+      const perm = await dirHandle.queryPermission({ mode: "read" });
+      if (perm !== "granted") {
+        const req = await dirHandle.requestPermission({ mode: "read" });
+        if (req !== "granted") { dirHandle = null; }
+      }
+      if (dirHandle) {
+        const fh = await dirHandle.getFileHandle("prompto-library.json");
+        const file = await fh.getFile();
+        return JSON.parse(await file.text());
+      }
+    } catch (e) { console.log("Prompto: dir handle read failed", e); dirHandle = null; }
+  }
+  // Fall back to cached file data (from file picker)
+  if (localJsonData) return localJsonData;
+  // Fall back to storage
+  const stored = await chrome.storage.local.get("prompto_local_json");
+  if (stored.prompto_local_json) {
+    localJsonData = stored.prompto_local_json;
+    return localJsonData;
+  }
+  return null;
 }
 
 async function pickLocalFolder() {
-  try {
-    dirHandle = await window.showDirectoryPicker({ mode: "read" });
-    await storeHandle(dirHandle);
-    document.getElementById("folderPath").textContent = "✓ " + dirHandle.name;
-    toast("Folder selected!");
-    await loadLibrary();
-  } catch (e) {
-    if (e.name !== "AbortError") toast("Could not open folder");
+  // Try directory picker first (Chrome — may not work in all browsers)
+  if (window.showDirectoryPicker) {
+    try {
+      dirHandle = await window.showDirectoryPicker({ mode: "read" });
+      await storeHandle(dirHandle);
+      document.getElementById("folderPath").textContent = "✓ Folder: " + dirHandle.name;
+      toast("Folder selected!");
+      await loadLibrary();
+      return;
+    } catch (e) {
+      if (e.name === "AbortError") return;
+      console.log("Prompto: Directory picker failed, falling back to file picker", e);
+    }
   }
+  // Fall back to file input (works in all browsers)
+  pickJsonFile();
+}
+
+function pickJsonFile() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".json,application/json";
+  input.addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if (!data.prompts) { toast("Invalid library file — missing 'prompts' array"); return; }
+      localJsonData = data;
+      // Store in chrome.storage for persistence
+      await chrome.storage.local.set({ prompto_local_json: data, prompto_local_filename: file.name });
+      document.getElementById("folderPath").textContent = "✓ File: " + file.name;
+      toast("Library loaded!");
+      await loadLibrary();
+    } catch (err) {
+      toast("Could not read file: " + err.message);
+    }
+  });
+  input.click();
 }
 
 // IndexedDB for handle persistence
@@ -449,7 +495,12 @@ async function loadSettingsUI() {
   document.getElementById("pasteJson").value = config.pasteJson || "";
   document.getElementById("refreshInterval").value = String(config.refreshInterval || 5);
   document.getElementById("customSelectors").value = config.customSelectors || "";
-  if (dirHandle) document.getElementById("folderPath").textContent = "✓ " + dirHandle.name;
+  if (dirHandle) {
+    document.getElementById("folderPath").textContent = "✓ Folder: " + dirHandle.name;
+  } else {
+    const sf = await chrome.storage.local.get("prompto_local_filename");
+    if (sf.prompto_local_filename) document.getElementById("folderPath").textContent = "✓ File: " + sf.prompto_local_filename;
+  }
 }
 
 function showSourcePanel(type) {
@@ -512,6 +563,8 @@ async function resetConfig() {
   if (!confirm("Reset all Prompto settings? This cannot be undone.")) return;
   await saveConfig(DEFAULT_CONFIG);
   dirHandle = null;
+  localJsonData = null;
+  await chrome.storage.local.remove(["prompto_local_json", "prompto_local_filename"]);
   try { const db = await openDB(); const tx = db.transaction("handles", "readwrite"); tx.objectStore("handles").clear(); } catch (e) {}
   chrome.runtime.sendMessage({ type: "updateBadge", count: 0 });
   toast("Reset complete");
