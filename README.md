@@ -147,7 +147,7 @@ Click the Prompto extension icon → the onboarding wizard will guide you throug
 - **Native Editing** — Prompts are standard Markdown notes. Edit them in Obsidian's editor with full preview, linking, and plugin support
 - **Context Detection** — Automatically gathers the active note, selected text, and backlinks as context for adaptation
 - **AI Adaptation** — A refiner LLM rewrites your prompt template using gathered context, making it specific and ready to use
-- **5 LLM Providers** — Send adapted prompts directly to Grok, Claude, GPT-4o, Venice.ai, or Ollama (local)
+- **6 LLM Providers** — Send adapted prompts directly to Grok, Claude, GPT-4o, Gemini, Venice.ai, or Ollama (local)
 - **File Watcher** — The sidebar auto-refreshes when you add, edit, or delete prompt files
 - **Auto-Export JSON** — Automatically generates `prompto-library.json` so the Chrome extension stays in sync
 - **Copy to Clipboard** — One-click copy from any prompt card
@@ -218,6 +218,7 @@ Go to Settings → Prompto, or click the ⚙ gear icon in the sidebar.
 | Grok | [console.x.ai](https://console.x.ai) |
 | Claude | [console.anthropic.com](https://console.anthropic.com) |
 | OpenAI | [platform.openai.com](https://platform.openai.com) |
+| Gemini | [aistudio.google.com](https://aistudio.google.com) |
 | Venice.ai | [venice.ai](https://venice.ai) |
 | Ollama | No key needed — runs locally at `localhost:11434` |
 
@@ -581,7 +582,7 @@ Prompto is designed with privacy as a core principle:
 A: No. They work independently. Use just the plugin if you only work in Obsidian. Use just the extension if you want prompts in your browser (you can paste the JSON directly). Use both for the full experience.
 
 **Q: What LLM providers are supported?**
-A: The Obsidian plugin supports Grok, Claude, GPT-4o, Venice.ai, and Ollama (local). The Chrome extension supports Grok, Claude, GPT-4o, and Venice.ai for AI adaptation.
+A: The Obsidian plugin supports Grok, Claude, GPT-4o, Gemini, Venice.ai, and Ollama (local). The Chrome extension supports Grok, Claude, GPT-4o, Gemini, and Venice.ai for AI adaptation.
 
 **Q: Is an API key required?**
 A: Not for basic usage. You can browse, search, copy, and organize prompts without any API key. A key is only needed for AI adaptation (smart rewriting) and direct LLM delivery from Obsidian.
