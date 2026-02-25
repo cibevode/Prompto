@@ -463,7 +463,7 @@ class PromptLibraryView extends obsidian.ItemView {
 		var newBtn = tr.createEl("button", { cls: "prompto-btn-new", title: "New prompt (creates note)" });
 		obsidian.setIcon(newBtn, "plus");
 		newBtn.addEventListener("click", async function() {
-			var name = "New Prompt " + Date.now().toString(36);
+			var name = "Prompto - New Prompt " + Date.now().toString(36);
 			var fp = self.plugin.settings.libraryPath + "/" + name + ".md";
 			await self.plugin.ensureLibraryFolder();
 			var content = PROMPT_TEMPLATE.replace("{{name}}", name);
@@ -670,7 +670,7 @@ class PromptoPlugin extends obsidian.Plugin {
 			var view = self.app.workspace.getActiveViewOfType(obsidian.MarkdownView); await self.saveCurrentAsPrompt(editor, view);
 		}});
 		this.addCommand({ id: "new-prompt", name: "New prompt from template", callback: async function() {
-			var name = "New Prompt " + Date.now().toString(36);
+			var name = "Prompto - New Prompt " + Date.now().toString(36);
 			var fp = self.settings.libraryPath + "/" + name + ".md";
 			await self.ensureLibraryFolder();
 			var content = PROMPT_TEMPLATE.replace("{{name}}", name);
@@ -737,7 +737,8 @@ class PromptoPlugin extends obsidian.Plugin {
 
 	async saveCurrentAsPrompt(editor, view) {
 		var text = editor.getSelection() || editor.getValue();
-		var title = (view && view.file) ? view.file.basename : "New Prompt";
+		var baseTitle = (view && view.file) ? view.file.basename : "New Prompt";
+		var title = "Prompto - " + baseTitle;
 		var fp = this.settings.libraryPath + "/" + title + ".md";
 		if (this.app.vault.getAbstractFileByPath(fp)) { new obsidian.Notice('"' + title + '" already exists in library.'); return; }
 		await this.ensureLibraryFolder();
