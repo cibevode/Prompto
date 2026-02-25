@@ -3,7 +3,7 @@
 	"name": "Prompto",
 	"version": "1.0.0",
 	"minAppVersion": "1.6.0",
-	"description": "AI prompt library with context-aware adaptation. Browse, adapt, and send prompts to 5 LLMs from a sidebar..",
+	"description": "AI prompt library with context-aware adaptation. Browse, adapt, and send prompts to 5 LLMs from a sidebar.",
 	"author": "Cibevode",
 	"authorUrl": "https://github.com/cibevode",
 	"isDesktopOnly": false
